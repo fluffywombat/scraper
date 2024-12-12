@@ -1,0 +1,16 @@
+{
+  "name": "product-scraper",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node program.ts"
+  },
+  "dependencies": {
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.3.1",
+    "openai": "^4.0.0",
+    "puppeteer": "^21.11.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.0.0"
+  }
+}
