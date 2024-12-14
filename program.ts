@@ -20,76 +20,132 @@ interface ProductData {
     error?: string;
 }
 async function isProductPage(content: string): Promise<boolean> {
-    // const completion = await openai.chat.completions.create({
-    //     messages: [
-    //         {
-    //             role: "system",
-    //             content: `You are an expert at analyzing HTML content to classify web pages. 
-    //     A "product page" typically contains some of the following elements:
-    //     - A product name
-    //     - A price
-    //     - A description or specifications
-    //     - Product images
-        
-    //     If the HTML content represents a product page, respond with "true". 
-    //     If it does not meet these criteria (e.g., it is a category page, home page, or another type of non-product page), respond with "false" and briefly explain what type of page it might be (e.g., "false: category page" or "false: home page"). 
-        
-    //     Your response should always include "true" or "false" at the start.`
-    //         },
-    //         {
-    //             role: "user",
-    //             content: content.substring(0, 4000) // Limiting content length
-    //         }
-    //     ],
-    //     model: "gpt-4o-mini",
-    // });
-    // console.log("OpenAI Response:", JSON.stringify(completion, null, 2));
-    // return completion.choices[0].message.content?.toLowerCase().includes('true') ?? false;
-    return true;
+//     const completion = await openai.chat.completions.create({
+//         messages: [
+//             {
+//                 role: "system",
+//                 content: `You are an expert e-commerce analyst. Analyze the provided HTML content and determine if this is a product page.
+
+// Key indicators of a product page:
+// 1. Contains specific product pricing information
+// 2. Has detailed product description/specifications
+// 3. Contains "Add to Cart", "Buy Now", or similar purchase buttons
+// 4. Shows product-specific images
+// 5. Often has product SKU/ID numbers
+// 6. Usually includes product title/name prominently displayed
+
+// Non-product pages typically are:
+// - Category/listing pages (multiple products)
+// - Home pages
+// - News articles
+// - Blog posts
+// - Contact pages
+
+// Respond with a JSON object containing:
+// {
+//     "isProduct": boolean,
+//     "confidence": number (0-1),
+//     "pageType": string,
+//     "reasoning": string
+// }`
+//             },
+//             {
+//                 role: "user",
+//                 content: content.substring(0, 8000) // Increased content length for better context
+//             }
+//         ],
+//         model: "gpt-4o",
+//         response_format: { type: "json_object" },
+//     });
+
+//     const analysis = JSON.parse(completion.choices[0].message.content);
+//     console.log("Page Analysis:", analysis);
+//     return analysis.isProduct && analysis.confidence > 0.7;
+    return true
 }
 
-
 async function extractProductData(url: string, content: string, images: string[]): Promise<ProductData> {
-    // First get product details
+    // First get product details with improved prompt
     const productCompletion = await openai.chat.completions.create({
         messages: [
             {
                 role: "system",
-                content: "Extract product information from the HTML content. Return a JSON object with: name of the product, price (as string), description of the product, brand."
+                content: `You are an expert e-commerce data analyst. Extract precise product information from the HTML content.
+
+Focus on these specific elements:
+1. Name: The main product title/name only
+2. Price: The current selling price (not MSRP/crossed-out prices). Include currency.
+3. Description: A clear, concise product description. Exclude marketing fluff.
+4. Brand: The manufacturer/brand name only
+
+Return a JSON object with these exact fields: name, price (as string), description, brand.
+
+Important rules:
+- Be precise and accurate
+- Don't make assumptions
+- If a field can't be found, use an empty string
+- Don't include related products information
+- For price, prefer the actual selling price over MSRP/RRP`
             },
             {
                 role: "user",
-                content: content.substring(0, 4000)
+                content: `URL: ${url}\n\nContent: ${content.substring(0, 8000)}`
             }
         ],
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         response_format: { type: "json_object" },
     });
 
     const productInfo = JSON.parse(productCompletion.choices[0].message.content || "{}");
 
-    // Then filter images
+    // Then filter images with improved prompt
     const imageCompletion = await openai.chat.completions.create({
         messages: [
             {
                 role: "system",
-                content: `You are analyzing images for a product. The product details are:
-                Name: ${productInfo.name}
-                Description: ${productInfo.description}
-                Brand: ${productInfo.brand}
+                content: `You are analyzing product images for an e-commerce site. 
                 
-                I will provide you with image URLs. Return a JSON object with an 'relevantImages' array containing only URLs that appear to be of the main product (based on image URL patterns and context). Exclude thumbnails, related products, advertisements, logos, and navigation icons.`
+Product details:
+Name: ${productInfo.name}
+Description: ${productInfo.description}
+Brand: ${productInfo.brand}
+
+Analyze the provided image URLs and return only those that show the main product. 
+
+Rules for image selection:
+1. Include: 
+   - Main product shots
+   - Different angles of the same product
+   - Product detail shots
+   
+2. Exclude:
+   - Thumbnails (usually containing 'thumb' or small dimensions)
+   - Related products
+   - Advertisement banners
+   - Navigation icons/logos
+   - Size charts
+   - Lifestyle/context shots not showing the product clearly
+
+Return a JSON object with:
+{
+    "relevantImages": string[],
+    "reasoning": string
+}`
             },
             {
                 role: "user",
-                content: JSON.stringify({ availableImages: images })
+                content: JSON.stringify({
+                    url: url,
+                    availableImages: images
+                })
             }
         ],
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         response_format: { type: "json_object" },
     });
 
     const imageAnalysis = JSON.parse(imageCompletion.choices[0].message.content || "{ \"relevantImages\": [] }");
+    console.log("Image Analysis:", imageAnalysis.reasoning);
 
     return {
         url,
